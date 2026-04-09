@@ -1,0 +1,49 @@
+{
+  "name": "bootcamp-bidding-dashboard-2026",
+  "displayName": "전국 대학교 부트캠프 입찰 현황 대시보드",
+  "description": "2026년 전국 대학교 부트캠프 입찰 현황을 한눈에 파악하는 인터랙티브 대시보드",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "author": "Your Organization",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/전국-대학교-부트캠프-입찰-현황-대시보드.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/전국-대학교-부트캠프-입찰-현황-대시보드/issues"
+  },
+  "homepage": "https://github.com/your-username/전국-대학교-부트캠프-입찰-현황-대시보드#readme",
+  "keywords": [
+    "bootcamp",
+    "dashboard",
+    "university",
+    "bidding",
+    "map",
+    "react",
+    "typescript",
+    "vite",
+    "tailwind"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.102.1",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
