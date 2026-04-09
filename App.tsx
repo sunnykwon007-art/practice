@@ -323,7 +323,7 @@ const App: React.FC = () => {
                       onClick={() => setStatusFilter(f)}
                       className={`text-[11px] font-bold transition-colors ${statusFilter === f ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
                     >
-                      {f === 'ALL' ? '전체' : f === 'NEW' ? '입찰대상' : '기존참여'}
+                      {f === 'ALL' ? '전체' : f === 'NEW' ? '진행프로젝트' : '기존참여'}
                     </button>
                   ))}
                 </div>
@@ -356,7 +356,7 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto">
             <div className="flex items-end justify-between mb-10">
               <div>
-                <h2 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">AXP 프로젝트 현황</h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">2026 대학부트캠프 AX_PJT</h2>
                 <div className="flex gap-2">
                    <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm">총 {filteredData.length}개 기관</span>
                    <span className="text-[11px] font-bold text-white bg-blue-500 px-4 py-1.5 rounded-full shadow-md shadow-blue-100">{filteredData.filter(d => d.status === 'EXISTING').length}개 기존 참여</span>
