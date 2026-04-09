@@ -1,6 +1,5 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { MOCK_DATA, REGION_COLORS, UNIVERSITY_PRESETS } from './constants';
 import { UniversityData, Region, Milestone } from './types';
 import { getAllData, addUniversity, updateUniversity, deleteUniversity } from './supabase';
@@ -60,8 +59,16 @@ const App: React.FC = () => {
       return [];
     }
   });
+  const [pendingApprovalEmails, setPendingApprovalEmails] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('pending_approval_emails');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [showApprovalManager, setShowApprovalManager] = useState(false);
-  const [newApprovalEmail, setNewApprovalEmail] = useState('');
+  const [loginEmailInput, setLoginEmailInput] = useState('');
 
   // 마스터 관리자 이메일
   const masterAdminEmail = import.meta.env.VITE_MASTER_ADMIN_EMAIL || 'sunny.kwon@modulabs.co.kr';
@@ -342,16 +349,25 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserEmail(null);
-    localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_email');
     setIsAdminOpen(false);
+  };
+
+  // 관리자 이메일 승인
+  const handleApproveEmail = (email: string) => {
+    setApprovedAdminEmails([...approvedAdminEmails, email]);
+    setPendingApprovalEmails(pendingApprovalEmails.filter(e => e !== email));
+  };
+
+  // 관리자 승인 거부
+ const handleRejectEmail = (email: string) => {
+    setPendingApprovalEmails(pendingApprovalEmails.filter(e => e !== email));
   };
 
   // 로컬스토리지에서 로그인 상태 복원
   useEffect(() => {
     const savedEmail = localStorage.getItem('admin_email');
-    const savedToken = localStorage.getItem('admin_token');
-    if (savedEmail && savedToken) {
+    if (savedEmail) {
       setUserEmail(savedEmail);
       setIsLoggedIn(true);
     }
@@ -362,24 +378,42 @@ const App: React.FC = () => {
     localStorage.setItem('approved_admin_emails', JSON.stringify(approvedAdminEmails));
   }, [approvedAdminEmails]);
 
-  // 관리자 이메일 승인
-  const handleApproveEmail = () => {
-    if (!newApprovalEmail.trim() || !newApprovalEmail.includes('@')) {
-      alert('유효한 이메일을 입력해주세요.');
-      return;
-    }
-    if (approvedAdminEmails.includes(newApprovalEmail)) {
-      alert('이미 승인된 이메일입니다.');
-      return;
-    }
-    setApprovedAdminEmails([...approvedAdminEmails, newApprovalEmail]);
-    setNewApprovalEmail('');
-    alert(`${newApprovalEmail} 계정이 승인되었습니다.`);
-  };
+  // 승인 대기 이메일 목록을 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('pending_approval_emails', JSON.stringify(pendingApprovalEmails));
+  }, [pendingApprovalEmails]);
 
-  // 관리자 이메일 승인 취소
-  const handleRevokeEmail = (email: string) => {
-    setApprovedAdminEmails(approvedAdminEmails.filter(e => e !== email));
+  // 이메일 로그인 처리
+  const handleEmailLogin = () => {
+    const email = loginEmailInput.trim();
+    if (!email || !email.includes('@')) {
+      setLoginError('유효한 이메일 주소를 입력해주세요.');
+      return;
+    }
+
+    if (email === masterAdminEmail) {
+      // 마스터 계정 로그인
+      setUserEmail(email);
+      setIsLoggedIn(true);
+      localStorage.setItem('admin_email', email);
+      setShowLoginModal(false);
+      setLoginError(null);
+      setLoginEmailInput('');
+    } else if (approvedAdminEmails.includes(email)) {
+      // 승인된 계정 로그인
+      setUserEmail(email);
+      setIsLoggedIn(true);
+      localStorage.setItem('admin_email', email);
+      setShowLoginModal(false);
+      setLoginError(null);
+      setLoginEmailInput('');
+    } else {
+      // 미승인 계정 - 승인 요청
+      if (!pendingApprovalEmails.includes(email)) {
+        setPendingApprovalEmails([...pendingApprovalEmails, email]);
+      }
+      setLoginError(`${email}에 대한 승인을 대기 중입니다.\n마스터 관리자에게 승인을 요청했습니다.`);
+    }
   };
 
   const handleAddOrUpdateData = async (e: React.FormEvent) => {
@@ -700,8 +734,8 @@ const App: React.FC = () => {
           <div className="absolute inset-0 z-[3000] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm pointer-events-auto">
             <div className="bg-white p-12 rounded-[2.5rem] shadow-2xl border border-slate-100 w-[420px] animate-in zoom-in-95 duration-200">
               <div className="flex flex-col items-center mb-8">
-                <h2 className="text-2xl font-black text-slate-900 text-center mb-2">데이터 관리</h2>
-                <p className="text-sm font-bold text-slate-500 text-center">데이터를 편집하시려면 구글 계정으로 로그인해주세요</p>
+                <h2 className="text-2xl font-black text-slate-900 text-center mb-2">데이터 관리 로그인</h2>
+                <p className="text-sm font-bold text-slate-500 text-center">이메일로 로그인 또는 승인 신청</p>
               </div>
 
               {loginError && (
@@ -710,17 +744,21 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              <div className="mb-6">
-                <GoogleLogin
-                  onSuccess={handleLoginSuccess}
-                  onError={() => console.log('Login Failed')}
-                  theme="outlined"
-                  size="large"
-                  width="100%"
+              <div className="mb-6 flex flex-col gap-3">
+                <input
+                  type="email"
+                  placeholder="이메일 주소"
+                  value={loginEmailInput}
+                  onChange={(e) => setLoginEmailInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleEmailLogin()}
+                  className="w-full p-3 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <button onClick={handleEmailLogin} className="w-full py-3 bg-blue-500 text-white font-black rounded-xl hover:bg-blue-600 transition-colors text-sm">
+                  로그인 / 승인 신청
+                </button>
               </div>
 
-              <button onClick={() => { setShowLoginModal(false); setLoginError(null); }} className="w-full py-3 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors border border-slate-200 rounded-xl hover:bg-slate-50">
+              <button onClick={() => { setShowLoginModal(false); setLoginError(null); setLoginEmailInput(''); }} className="w-full py-3 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors border border-slate-200 rounded-xl hover:bg-slate-50">
                 닫기
               </button>
             </div>
@@ -754,40 +792,55 @@ const App: React.FC = () => {
           <div className="absolute inset-0 z-[3100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm pointer-events-auto">
             <div className="bg-white p-8 rounded-[2rem] shadow-2xl border border-slate-100 w-[500px] max-h-[80vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6 border-b pb-4">
-                <h2 className="text-xl font-black text-slate-900">데이터 관리 승인</h2>
+                <h2 className="text-xl font-black text-slate-900">이메일 승인 관리</h2>
                 <button onClick={() => setShowApprovalManager(false)} className="text-slate-400 hover:text-slate-600">✕</button>
               </div>
 
               <div className="mb-6">
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">새 관리자 이메일 추가</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="email" 
-                    value={newApprovalEmail} 
-                    onChange={(e) => setNewApprovalEmail(e.target.value)}
-                    placeholder="example@modulabs.co.kr"
-                    className="flex-1 p-3 text-sm font-bold bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button onClick={handleApproveEmail} className="px-6 py-3 bg-blue-500 text-white font-black rounded-lg hover:bg-blue-600 transition-colors text-sm">
-                    추가
-                  </button>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-3 border-b pb-2">승인 대기 중 ({pendingApprovalEmails.length})</label>
+                <div className="space-y-2">
+                  {pendingApprovalEmails.length === 0 ? (
+                    <p className="text-sm text-slate-400">승인 대기 중인 이메일이 없습니다.</p>
+                  ) : (
+                    pendingApprovalEmails.map(email => (
+                      <div key={email} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <span className="text-sm font-bold text-orange-900">{email}</span>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleApproveEmail(email)}
+                            className="px-3 py-1 text-xs font-bold text-white bg-green-500 hover:bg-green-600 rounded transition-colors"
+                          >
+                            승인
+                          </button>
+                          <button 
+                            onClick={() => handleRejectEmail(email)}
+                            className="px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
+                            거부
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-3">승인된 관리자 목록</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-3 border-b pb-2">승인된 관리자 ({approvedAdminEmails.length})</label>
                 <div className="space-y-2">
                   {approvedAdminEmails.length === 0 ? (
                     <p className="text-sm text-slate-400">승인된 이메일이 없습니다.</p>
                   ) : (
                     approvedAdminEmails.map(email => (
-                      <div key={email} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
-                        <span className="text-sm font-bold text-slate-800">{email}</span>
+                      <div key={email} className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                        <span className="text-sm font-bold text-green-900">{email}</span>
                         <button 
-                          onClick={() => handleRevokeEmail(email)}
+                          onClick={() => {
+                            setApprovedAdminEmails(approvedAdminEmails.filter(e => e !== email));
+                          }}
                           className="px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded transition-colors"
                         >
-                          거부
+                          취소
                         </button>
                       </div>
                     ))
@@ -839,15 +892,4 @@ const App: React.FC = () => {
   );
 };
 
-const AppWrapper = () => {
-  // Google OAuth Client ID - 환경변수 사용 또는 기본값
-  const clientId = process.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
-  
-  return (
-    <GoogleOAuthProvider clientId={clientId}>
-      <App />
-    </GoogleOAuthProvider>
-  );
-};
-
-export default AppWrapper;
+export default App;
