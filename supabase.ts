@@ -16,7 +16,7 @@ export const isSupabaseAvailable = supabaseUrl && supabaseKey && supabase;
 export async function getAllData(): Promise<UniversityData[]> {
   try {
     if (!isSupabaseAvailable) {
-      console.warn("Supabase 미연결 - 초기 데이터로 대체");
+      console.warn("Supabase 미연결 - 초기 데이터로 대체됨");
       return [];
     }
 
@@ -86,17 +86,17 @@ export async function updateUniversity(id: string, data: Partial<UniversityData>
     console.error("데이터 업데이트 실패:", error);
     return null;
   }
-}if (!isSupabaseAvailable) {
+}
+
+// 데이터 삭제
+export async function deleteUniversity(id: string) {
+  try {
+    if (!isSupabaseAvailable) {
       console.warn("Supabase 미연결 - 로컬에서만 삭제됨");
       return true;
     }
 
     const { error } = await supabase!
-
-// 데이터 삭제
-export async function deleteUniversity(id: string) {
-  try {
-    const { error } = await supabase
       .from("universities")
       .delete()
       .eq("school_id", id);
@@ -110,23 +110,22 @@ export async function deleteUniversity(id: string) {
   } catch (error) {
     console.error("데이터 삭제 실패:", error);
     return false;
+  }
+}
+
+// 실시간 구독 (선택사항)
+export function subscribeToChanges(callback: (data: UniversityData[]) => void) {
   if (!isSupabaseAvailable) {
     console.warn("Supabase 미연결 - 실시간 구독 불가능");
     return null;
   }
 
   const subscription = supabase!
-}
-
-// 실시간 구독 (선택사항)
-export function subscribeToChanges(callback: (data: UniversityData[]) => void) {
-  const subscription = supabase
     .channel("universities_changes")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "universities" },
       () => {
-        // 데이터 변경 시 콜백 실행
         getAllData().then(callback);
       }
     )

@@ -1,8 +1,6 @@
-@import "tailwindcss";
-
-@theme {
-  --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   body {
