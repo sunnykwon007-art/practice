@@ -14,7 +14,18 @@ const App: React.FC = () => {
   const mapInstance = useRef<any>(null);
   const markersLayer = useRef<any>(null);
   
-  const [data, setData] = useState<UniversityData[]>(MOCK_DATA);
+  // 로컬스토리지에서 먼저 데이터 로드 시도
+  const [data, setData] = useState<UniversityData[]>(() => {
+    try {
+      const saved = localStorage.getItem('univ_dashboard_data');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.warn('로컬스토리지 파싱 오류:', error);
+    }
+    return MOCK_DATA;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   const [viewMode, setViewMode] = useState<ViewMode>('map');
@@ -40,36 +51,37 @@ const App: React.FC = () => {
 
   const industries = ['전체', '반도체', '이차전지', '바이오', '디스플레이', '항공우주', '미래차', '인공지능'];
 
-  // Supabase에서 데이터 로드
+  // 로컬스토리지에 데이터 저장
   useEffect(() => {
-    const loadData = async () => {
+    if (data && data.length > 0) {
+      try {
+        localStorage.setItem('univ_dashboard_data', JSON.stringify(data));
+      } catch (error) {
+        console.warn('로컬스토리지 저장 오류:', error);
+      }
+    }
+  }, [data]);
+
+  // Supabase 데이터 로드 (선택사항)
+  useEffect(() => {
+    const loadSupabaseData = async () => {
       try {
         setIsLoading(true);
         const supabaseData = await getAllData();
         
-        // Supabase 데이터가 있으면 사용, 없으면 MOCK_DATA + 로컬스토리지 사용
-        if (supabaseData.length > 0) {
+        // Supabase 데이터가 있고 로컬스토리지가 비어있으면 사용
+        if (supabaseData.length > 0 && localStorage.getItem('univ_dashboard_data') === null) {
           setData(supabaseData);
-        } else {
-          const saved = localStorage.getItem('univ_dashboard_data');
-          setData(saved ? JSON.parse(saved) : MOCK_DATA);
         }
       } catch (error) {
-        console.error('데이터 로드 실패:', error);
-        const saved = localStorage.getItem('univ_dashboard_data');
-        setData(saved ? JSON.parse(saved) : MOCK_DATA);
+        console.warn('Supabase 로드 실패 (로컬스토리지 사용):', error);
       } finally {
         setIsLoading(false);
       }
     };
     
-    loadData();
+    loadSupabaseData();
   }, []);
-
-  // 로컬스토리지에도 동기화
-  useEffect(() => {
-    localStorage.setItem('univ_dashboard_data', JSON.stringify(data));
-  }, [data]);
 
   const handleSchoolNameChange = (name: string) => {
     setFormData(prev => ({ ...prev, school_name: name }));
@@ -137,7 +149,7 @@ const App: React.FC = () => {
       const circle = L.circleMarker([univ.lat, univ.lng], markerStyle);
 
       const statusBadge = isNew 
-        ? `<span style="font-size: 9px; background: #EF4444; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 900; margin-left: 6px; box-shadow: 0 2px 4px rgba(239,68,68,0.2);">2026 입찰대학</span>`
+        ? `<span style="font-size: 9px; background: #EF4444; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 900; margin-left: 6px; box-shadow: 0 2px 4px rgba(239,68,68,0.2);">2026 프로젝트진행</span>`
         : `<span style="font-size: 9px; background: #64748b; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-left: 6px;">기존참여</span>`;
 
       const proposalTags = univ.proposal_types.map(t => 
@@ -407,7 +419,7 @@ const App: React.FC = () => {
               <form onSubmit={handleAddOrUpdateData} className="space-y-6">
                 <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-2xl border border-slate-100">
                    <button type="button" onClick={() => setFormData({...formData, status: 'EXISTING'})} className={`py-3 rounded-xl text-xs font-black transition-all ${formData.status === 'EXISTING' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>기존 참여 대학</button>
-                   <button type="button" onClick={() => setFormData({...formData, status: 'NEW'})} className={`py-3 rounded-xl text-xs font-black transition-all ${formData.status === 'NEW' ? 'bg-red-500 text-white shadow-md' : 'text-slate-400'}`}>2026 입찰 예정</button>
+                   <button type="button" onClick={() => setFormData({...formData, status: 'NEW'})} className={`py-3 rounded-xl text-xs font-black transition-all ${formData.status === 'NEW' ? 'bg-red-500 text-white shadow-md' : 'text-slate-400'}`}>2026 프로젝트진행</button>
                 </div>
                 
                 <div className="space-y-4">
@@ -469,8 +481,8 @@ const App: React.FC = () => {
                       <div className="w-3.5 h-3.5 rounded-full bg-red-600 border-2 border-white shadow-md z-10"></div>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[11px] font-black text-red-500">2026 입찰 대학</span>
-                      <span className="text-[9px] font-bold text-red-300 uppercase tracking-tighter leading-none">Modu High-Priority Target</span>
+                      <span className="text-[11px] font-black text-red-500">2026 프로젝트진행</span>
+                      <span className="text-[9px] font-bold text-red-300 uppercase tracking-tighter leading-none">Modu Project In Progress</span>
                     </div>
                   </div>
                </div>
