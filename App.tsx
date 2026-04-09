@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { MOCK_DATA, REGION_COLORS, UNIVERSITY_PRESETS } from './constants';
-import { UniversityData, Region } from './types';
+import { UniversityData, Region, Milestone } from './types';
 import { getAllData, addUniversity, updateUniversity, deleteUniversity } from './supabase';
 
 declare const L: any;
@@ -33,6 +33,18 @@ const App: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [industryFilter, setIndustryFilter] = useState<string>('전체');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+
+  // 상세 화면 관련 상태
+  const [selectedUniversity, setSelectedUniversity] = useState<UniversityData | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [newMilestone, setNewMilestone] = useState({
+    title: '',
+    description: '',
+    plannedDate: '',
+    status: 'pending' as 'pending' | 'in-progress' | 'completed',
+    progress: 0
+  });
 
   const [formData, setFormData] = useState({
     school_name: '',
@@ -82,6 +94,59 @@ const App: React.FC = () => {
     
     loadSupabaseData();
   }, []);
+
+  // 마일스톤 추가
+  const handleAddMilestone = () => {
+    if (!selectedUniversity || !newMilestone.title.trim() || !newMilestone.plannedDate) return;
+    
+    const milestone: Milestone = {
+      id: Date.now().toString(),
+      title: newMilestone.title,
+      description: newMilestone.description,
+      plannedDate: newMilestone.plannedDate,
+      status: newMilestone.status,
+      progress: newMilestone.progress
+    };
+
+    const updatedUniv = {
+      ...selectedUniversity,
+      milestones: [...(selectedUniversity.milestones || []), milestone]
+    };
+
+    setData(prev => prev.map(u => u.school_id === selectedUniversity.school_id ? updatedUniv : u));
+    setSelectedUniversity(updatedUniv);
+    setNewMilestone({ title: '', description: '', plannedDate: '', status: 'pending', progress: 0 });
+  };
+
+  // 마일스톤 삭제
+  const handleDeleteMilestone = (milestoneId: string) => {
+    if (!selectedUniversity) return;
+    
+    const updatedUniv = {
+      ...selectedUniversity,
+      milestones: (selectedUniversity.milestones || []).filter(m => m.id !== milestoneId)
+    };
+
+    setData(prev => prev.map(u => u.school_id === selectedUniversity.school_id ? updatedUniv : u));
+    setSelectedUniversity(updatedUniv);
+  };
+
+  // 마일스톤 상태 업데이트
+  const handleUpdateMilestone = (milestoneId: string, field: string, value: any) => {
+    if (!selectedUniversity) return;
+
+    const updatedMilestones = (selectedUniversity.milestones || []).map(m =>
+      m.id === milestoneId ? { ...m, [field]: value } : m
+    );
+
+    const updatedUniv = {
+      ...selectedUniversity,
+      milestones: updatedMilestones
+    };
+
+    setData(prev => prev.map(u => u.school_id === selectedUniversity.school_id ? updatedUniv : u));
+    setSelectedUniversity(updatedUniv);
+  };
 
   const handleSchoolNameChange = (name: string) => {
     setFormData(prev => ({ ...prev, school_name: name }));
@@ -306,7 +371,7 @@ const App: React.FC = () => {
         <div className="flex items-center gap-6">
           <div className="flex items-center pr-6 border-r border-slate-100">
               <div className="flex flex-col">
-                  <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none mb-1">부트캠프 입찰 현황판 <span className="text-red-500">2026</span></h1>
+                  <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none mb-1">AX_PJT</h1>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Partner Analysis Dashboard</p>
               </div>
           </div>
@@ -323,7 +388,7 @@ const App: React.FC = () => {
                       onClick={() => setStatusFilter(f)}
                       className={`text-[11px] font-bold transition-colors ${statusFilter === f ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
                     >
-                      {f === 'ALL' ? '전체' : f === 'NEW' ? '진행프로젝트' : '기존참여'}
+                      {f === 'ALL' ? '전체' : f === 'NEW' ? '진행프로젝트' : '가망고객'}
                     </button>
                   ))}
                 </div>
@@ -398,6 +463,7 @@ const App: React.FC = () => {
                       <td className="px-6 py-6"><div className="text-[11px] font-bold text-slate-500 truncate max-w-[150px]">{univ.contact_info || '-'}</div></td>
                       <td className="px-6 py-6 text-right font-black text-sm text-slate-800">{formatCurrency(univ.amount_sum)}</td>
                       <td className="px-10 py-6 text-center flex items-center justify-center gap-2">
+                        <button onClick={() => { setSelectedUniversity(univ); setShowDetailsModal(true); }} className="p-2 text-slate-300 hover:text-green-600 transition-colors" title="상세보기"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
                         <button onClick={() => startEdit(univ)} className="p-2 text-slate-300 hover:text-blue-600 transition-colors" title="수정"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
                         <button onClick={() => handleDeleteUniversity(univ.school_id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors" title="삭제"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                       </td>
@@ -471,8 +537,8 @@ const App: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <div className="w-7 h-7 rounded-full border-[2px] border-white bg-slate-400 shadow-sm"></div>
                     <div className="flex flex-col">
-                      <span className="text-[11px] font-black text-slate-700">기존 참여 대학</span>
-                      <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter leading-none">Established Partner</span>
+                      <span className="text-[11px] font-black text-slate-700">가망고객</span>
+                      <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter leading-none">Potential Customer</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">

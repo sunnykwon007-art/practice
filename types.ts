@@ -1,4 +1,14 @@
 
+export interface Milestone {
+  id: string;
+  title: string;
+  description?: string;
+  plannedDate: string; // YYYY-MM-DD
+  completedDate?: string; // YYYY-MM-DD
+  status: 'pending' | 'in-progress' | 'completed';
+  progress?: number; // 0-100
+}
+
 export interface UniversityData {
   school_id: string;
   school_name: string;
@@ -13,6 +23,7 @@ export interface UniversityData {
   industry: string;
   proposal_types: ('교육LMS' | '세미나')[];
   contact_info?: string; // 비고 및 담당자 연락처 추가
+  milestones?: Milestone[]; // 프로젝트 진행 일정/마일스톤
 }
 
 export enum Region {
