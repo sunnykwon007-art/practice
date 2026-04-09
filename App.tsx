@@ -52,12 +52,23 @@ const App: React.FC = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [approvedAdminEmails, setApprovedAdminEmails] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('approved_admin_emails');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showApprovalManager, setShowApprovalManager] = useState(false);
+  const [newApprovalEmail, setNewApprovalEmail] = useState('');
 
   // 마스터 관리자 이메일
   const masterAdminEmail = import.meta.env.VITE_MASTER_ADMIN_EMAIL || 'sunny.kwon@modulabs.co.kr';
+  const isMasterAdmin = userEmail === masterAdminEmail;
 
-  // 데이터 관리 권한 확인
-  const hasEditPermission = isLoggedIn && userEmail === masterAdminEmail;
+  // 데이터 관리 권한 확인 (마스터이거나 승인된 이메일)
+  const hasEditPermission = isLoggedIn && (isMasterAdmin || approvedAdminEmails.includes(userEmail || ''));
 
   const [formData, setFormData] = useState({
     school_name: '',
@@ -317,12 +328,6 @@ const App: React.FC = () => {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const email = payload.email;
 
-      // 마스터 계정만 허용
-      if (email !== masterAdminEmail) {
-        setLoginError(`접근 거부: '${email}' 계정은 데이터 관리 권한이 없습니다.\n마스터 관리자 계정으로 로그인해주세요.\n(${masterAdminEmail})`);
-        return;
-      }
-
       setUserEmail(email);
       setIsLoggedIn(true);
       setShowLoginModal(false);
@@ -352,10 +357,39 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // 승인된 이메일 목록을 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('approved_admin_emails', JSON.stringify(approvedAdminEmails));
+  }, [approvedAdminEmails]);
+
+  // 관리자 이메일 승인
+  const handleApproveEmail = () => {
+    if (!newApprovalEmail.trim() || !newApprovalEmail.includes('@')) {
+      alert('유효한 이메일을 입력해주세요.');
+      return;
+    }
+    if (approvedAdminEmails.includes(newApprovalEmail)) {
+      alert('이미 승인된 이메일입니다.');
+      return;
+    }
+    setApprovedAdminEmails([...approvedAdminEmails, newApprovalEmail]);
+    setNewApprovalEmail('');
+    alert(`${newApprovalEmail} 계정이 승인되었습니다.`);
+  };
+
+  // 관리자 이메일 승인 취소
+  const handleRevokeEmail = (email: string) => {
+    setApprovedAdminEmails(approvedAdminEmails.filter(e => e !== email));
+  };
+
   const handleAddOrUpdateData = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasEditPermission) {
-      setLoginError(`접근 거부: 마스터 관리자만 데이터를 편집할 수 있습니다.\n(${masterAdminEmail})`);
+      if (!isLoggedIn) {
+        setLoginError('로그인이 필요합니다.');
+      } else {
+        setLoginError(`승인 대기 중입니다.\n마스터 관리자(${masterAdminEmail})에게 승인을 요청해주세요.`);
+      }
       setShowLoginModal(true);
       return;
     }
@@ -396,7 +430,11 @@ const App: React.FC = () => {
 
   const handleDeleteUniversity = async (id: string) => {
     if (!hasEditPermission) {
-      setLoginError(`접근 거부: 마스터 관리자만 데이터를 삭제할 수 있습니다.\n(${masterAdminEmail})`);
+      if (!isLoggedIn) {
+        setLoginError('로그인이 필요합니다.');
+      } else {
+        setLoginError(`승인 대기 중입니다.\n마스터 관리자(${masterAdminEmail})에게 승인을 요청해주세요.`);
+      }
       setShowLoginModal(true);
       return;
     }
@@ -413,7 +451,11 @@ const App: React.FC = () => {
 
   const startEdit = (univ: UniversityData) => {
     if (!hasEditPermission) {
-      setLoginError(`접근 거부: 마스터 관리자만 데이터를 편집할 수 있습니다.\n(${masterAdminEmail})`);
+      if (!isLoggedIn) {
+        setLoginError('로그인이 필요합니다.');
+      } else {
+        setLoginError(`승인 대기 중입니다.\n마스터 관리자(${masterAdminEmail})에게 승인을 요청해주세요.`);
+      }
       setShowLoginModal(true);
       return;
     }
@@ -480,7 +522,11 @@ const App: React.FC = () => {
           
           <button onClick={() => {
             if (!isAdminOpen && !hasEditPermission) {
-              setLoginError(`접근 거부: 마스터 관리자만 데이터를 편집할 수 있습니다.\n(${masterAdminEmail})`);
+              if (!isLoggedIn) {
+                setLoginError('로그인이 필요합니다.');
+              } else {
+                setLoginError(`승인 대기 중입니다.\n마스터 관리자(${masterAdminEmail})에게 승인을 요청해주세요.`);
+              }
               setShowLoginModal(true);
             } else {
               if (isAdminOpen) resetForm();
@@ -685,12 +731,69 @@ const App: React.FC = () => {
           <div className="absolute top-28 right-8 z-[1500] bg-white p-4 rounded-2xl shadow-lg border border-slate-100">
             <div className="flex items-center gap-4">
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">로그인됨</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                  {isMasterAdmin ? '마스터 관리자' : hasEditPermission ? '승인됨' : '승인 대기중'}
+                </span>
                 <span className="text-sm font-black text-slate-900">{userEmail}</span>
               </div>
-              <button onClick={handleLogout} className="px-4 py-2 bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors">
-                로그아웃
-              </button>
+              <div className="flex gap-2">
+                {isMasterAdmin && (
+                  <button onClick={() => setShowApprovalManager(true)} className="px-3 py-2 bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs font-bold rounded-lg transition-colors">
+                    승인관리
+                  </button>
+                )}
+                <button onClick={handleLogout} className="px-4 py-2 bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors">
+                  로그아웃
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showApprovalManager && isMasterAdmin && (
+          <div className="absolute inset-0 z-[3100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm pointer-events-auto">
+            <div className="bg-white p-8 rounded-[2rem] shadow-2xl border border-slate-100 w-[500px] max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6 border-b pb-4">
+                <h2 className="text-xl font-black text-slate-900">데이터 관리 승인</h2>
+                <button onClick={() => setShowApprovalManager(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">새 관리자 이메일 추가</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="email" 
+                    value={newApprovalEmail} 
+                    onChange={(e) => setNewApprovalEmail(e.target.value)}
+                    placeholder="example@modulabs.co.kr"
+                    className="flex-1 p-3 text-sm font-bold bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button onClick={handleApproveEmail} className="px-6 py-3 bg-blue-500 text-white font-black rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                    추가
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-3">승인된 관리자 목록</label>
+                <div className="space-y-2">
+                  {approvedAdminEmails.length === 0 ? (
+                    <p className="text-sm text-slate-400">승인된 이메일이 없습니다.</p>
+                  ) : (
+                    approvedAdminEmails.map(email => (
+                      <div key={email} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <span className="text-sm font-bold text-slate-800">{email}</span>
+                        <button 
+                          onClick={() => handleRevokeEmail(email)}
+                          className="px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded transition-colors"
+                        >
+                          거부
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
