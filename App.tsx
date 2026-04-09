@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { MOCK_DATA, REGION_COLORS, UNIVERSITY_PRESETS } from './constants';
 import { UniversityData, Region, Milestone } from './types';
 import { getAllData, addUniversity, updateUniversity, deleteUniversity } from './supabase';
@@ -45,6 +46,18 @@ const App: React.FC = () => {
     status: 'pending' as 'pending' | 'in-progress' | 'completed',
     progress: 0
   });
+
+  // 로그인 관련 상태
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // 마스터 관리자 이메일
+  const masterAdminEmail = import.meta.env.VITE_MASTER_ADMIN_EMAIL || 'sunny.kwon@modulabs.co.kr';
+
+  // 데이터 관리 권한 확인
+  const hasEditPermission = isLoggedIn && userEmail === masterAdminEmail;
 
   const [formData, setFormData] = useState({
     school_name: '',
@@ -295,8 +308,57 @@ const App: React.FC = () => {
     setEditingId(null);
   };
 
+  // 로그인 처리
+  const handleLoginSuccess = (credentialResponse: any) => {
+    try {
+      setLoginError(null);
+      const token = credentialResponse.credential;
+      // JWT 토큰에서 이메일 정보 추출
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const email = payload.email;
+
+      // 마스터 계정만 허용
+      if (email !== masterAdminEmail) {
+        setLoginError(`접근 거부: '${email}' 계정은 데이터 관리 권한이 없습니다.\n마스터 관리자 계정으로 로그인해주세요.\n(${masterAdminEmail})`);
+        return;
+      }
+
+      setUserEmail(email);
+      setIsLoggedIn(true);
+      setShowLoginModal(false);
+      localStorage.setItem('admin_token', token);
+      localStorage.setItem('admin_email', email);
+    } catch (error) {
+      console.error('로그인 처리 오류:', error);
+      setLoginError('로그인 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserEmail(null);
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_email');
+    setIsAdminOpen(false);
+  };
+
+  // 로컬스토리지에서 로그인 상태 복원
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('admin_email');
+    const savedToken = localStorage.getItem('admin_token');
+    if (savedEmail && savedToken) {
+      setUserEmail(savedEmail);
+      setIsLoggedIn(true);
+    }
+  }, []);
+
   const handleAddOrUpdateData = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasEditPermission) {
+      setLoginError(`접근 거부: 마스터 관리자만 데이터를 편집할 수 있습니다.\n(${masterAdminEmail})`);
+      setShowLoginModal(true);
+      return;
+    }
     const payload: UniversityData = {
       school_id: editingId || `S${Date.now()}`,
       school_name: formData.school_name,
@@ -333,6 +395,11 @@ const App: React.FC = () => {
   };
 
   const handleDeleteUniversity = async (id: string) => {
+    if (!hasEditPermission) {
+      setLoginError(`접근 거부: 마스터 관리자만 데이터를 삭제할 수 있습니다.\n(${masterAdminEmail})`);
+      setShowLoginModal(true);
+      return;
+    }
     if (!confirm('정말 삭제하시겠습니까?')) return;
     
     try {
@@ -345,6 +412,11 @@ const App: React.FC = () => {
   };
 
   const startEdit = (univ: UniversityData) => {
+    if (!hasEditPermission) {
+      setLoginError(`접근 거부: 마스터 관리자만 데이터를 편집할 수 있습니다.\n(${masterAdminEmail})`);
+      setShowLoginModal(true);
+      return;
+    }
     setEditingId(univ.school_id);
     setFormData({
       school_name: univ.school_name,
@@ -406,7 +478,15 @@ const App: React.FC = () => {
             <button onClick={() => setViewMode('list')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500'}`}>List</button>
           </div>
           
-          <button onClick={() => { if (isAdminOpen) resetForm(); setIsAdminOpen(!isAdminOpen); }} className={`px-6 py-2.5 rounded-2xl text-xs font-black transition-all ${isAdminOpen ? 'bg-slate-800 text-white' : 'bg-red-500 text-white shadow-lg shadow-red-100 hover:scale-[1.02]'}`}>
+          <button onClick={() => {
+            if (!isAdminOpen && !hasEditPermission) {
+              setLoginError(`접근 거부: 마스터 관리자만 데이터를 편집할 수 있습니다.\n(${masterAdminEmail})`);
+              setShowLoginModal(true);
+            } else {
+              if (isAdminOpen) resetForm();
+              setIsAdminOpen(!isAdminOpen);
+            }
+          }} className={`px-6 py-2.5 rounded-2xl text-xs font-black transition-all ${isAdminOpen ? 'bg-slate-800 text-white' : 'bg-red-500 text-white shadow-lg shadow-red-100 hover:scale-[1.02]'}`}>
             {isAdminOpen ? '취소' : '데이터 관리'}
           </button>
         </div>
@@ -569,8 +649,53 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {showLoginModal && (
+          <div className="absolute inset-0 z-[3000] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm pointer-events-auto">
+            <div className="bg-white p-12 rounded-[2.5rem] shadow-2xl border border-slate-100 w-[420px] animate-in zoom-in-95 duration-200">
+              <div className="flex flex-col items-center mb-8">
+                <h2 className="text-2xl font-black text-slate-900 text-center mb-2">데이터 관리</h2>
+                <p className="text-sm font-bold text-slate-500 text-center">데이터를 편집하시려면 구글 계정으로 로그인해주세요</p>
+              </div>
+
+              {loginError && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+                  <p className="text-xs font-bold text-red-600 whitespace-pre-line">{loginError}</p>
+                </div>
+              )}
+
+              <div className="mb-6">
+                <GoogleLogin
+                  onSuccess={handleLoginSuccess}
+                  onError={() => console.log('Login Failed')}
+                  theme="outlined"
+                  size="large"
+                  width="100%"
+                />
+              </div>
+
+              <button onClick={() => { setShowLoginModal(false); setLoginError(null); }} className="w-full py-3 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors border border-slate-200 rounded-xl hover:bg-slate-50">
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isLoggedIn && (
+          <div className="absolute top-28 right-8 z-[1500] bg-white p-4 rounded-2xl shadow-lg border border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">로그인됨</span>
+                <span className="text-sm font-black text-slate-900">{userEmail}</span>
+              </div>
+              <button onClick={handleLogout} className="px-4 py-2 bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors">
+                로그아웃
+              </button>
+            </div>
+          </div>
+        )}
       </main>
-      
+
       <style>{`
         .marker-bid-target {
           animation: bid-glow 2s infinite ease-in-out;
@@ -611,4 +736,15 @@ const App: React.FC = () => {
   );
 };
 
-export default App;
+const AppWrapper = () => {
+  // Google OAuth Client ID - 환경변수 사용 또는 기본값
+  const clientId = process.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+  
+  return (
+    <GoogleOAuthProvider clientId={clientId}>
+      <App />
+    </GoogleOAuthProvider>
+  );
+};
+
+export default AppWrapper;
