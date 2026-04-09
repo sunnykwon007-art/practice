@@ -356,7 +356,7 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto">
             <div className="flex items-end justify-between mb-10">
               <div>
-                <h2 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">대학 협력 데이터베이스</h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">AXP 프로젝트 현황</h2>
                 <div className="flex gap-2">
                    <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm">총 {filteredData.length}개 기관</span>
                    <span className="text-[11px] font-bold text-white bg-blue-500 px-4 py-1.5 rounded-full shadow-md shadow-blue-100">{filteredData.filter(d => d.status === 'EXISTING').length}개 기존 참여</span>
